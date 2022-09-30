@@ -6,7 +6,7 @@ Created on Sat Jul 30 10:27:55 2022
 """
 import os
 import pickle
-
+import copy
 
 class dictionary_search():
     
@@ -35,9 +35,9 @@ class dictionary_search():
                 #self.len_vector=set(list(self.len_vector)+[leng])
                 self.database.append(pattern)
                 prefix_vector.append(leng-1)
-                vector=[None]*(leng)
+                vector=[0]*(leng)
                 for i in prefix_vector:
-                    vector[i]=pattern[i]
+                    vector[i]=1
                 prefix_vector=[]
                 self.detect_vector.append(vector)
 
@@ -109,74 +109,98 @@ class dictionary_search():
             pat_len=len(pattern[0])
             len_vector=set(list(len_vector)+[pat_len])
             dict_database_length[pat_len]=dict_database_length.get(pat_len,[])+[pattern]
-        #print(dict_database_length,'\n\n')
+        print(dict_database_length,'\n')
         len_vector=list(len_vector)
         len_vector.sort(reverse=True)
         #print(len_vector)
-        dict_pointers=[]
-        pointer=[None]*(max(len_vector))
+        dict_pointer=[None]*(max(len_vector))
         #print(len_vector,'\n\n')
-        
+        #print(len_vector)
         for n,le in enumerate(len_vector):
+            #print(le,'le')
             next_len=len_vector[n+1] if n != (len(len_vector)-1) else 0
             #print(le)
             dict_database.extend(dict_database_length[le])
             #print(dict_database,'\n\n')
-            dict_database.sort(key=lambda dict_database : dict_database[0])
-            #print(dict_database,'\n\n')
+            #dict_database.sort(key=lambda dict_database : dict_database[0])
+            #print(le,dict_database,'le and database\n')
             
+
             for length in range(le,next_len,-1):
                 patterns=dict_database
-                
-                parent_child={}
+                #max_len_child=0
+                child_parent_rest={}
                 #print(length)
                 for pattern in patterns:
             
                     #print (pattern)
                     parent=pattern[0][0:length-1]
                     child=pattern[0][length-1]
-                    parent_child[parent]=parent_child.get(parent,'')+child
-                    current_pointer=parent_child[parent].index(child)
-                    if pointer[length-1]==None:
-                        pointer[length-1]={child:current_pointer}
+                    rest=pattern[0][length:]
+                    pattern_index=pattern[1]
+                    #print(parent,'----',child,'----',rest,'----,',pattern_index)
+                    #parent_child[parent]=parent_child.get(parent,'')+child
+                    if child not in child_parent_rest:
+                        child_parent_rest[child]=[[parent],[rest],[pattern_index]]
                     else:
-                        if child not in pointer[length-1]:
-                            pointer[length-1][child]=current_pointer
-                        elif current_pointer > pointer[length-1][child]:
-                            pointer[length-1][child]= current_pointer
-
+                        child_parent_rest[child][0].extend([parent])
+                        child_parent_rest[child][1].extend([rest])
+                        child_parent_rest[child][2].extend([pattern_index])
+                    #print(child_parent_rest)
+                    #if max_len_child < len(parent_child[parent]):
+                    #    max_len_child=max_len_child                    
+                    
+                    
+                #reverse_parent_child={}
+                #parent_childs_rests={}
+                level_pointer={}
                 dict_database=[]
-                dict_pointers=pointer
-                temp_pattern_gen=(pattern for pattern in patterns)         
-            
-                for par,chil in parent_child.items():
+                temp_parent_childs_rests={}
+                #print(child_parent_rest)
+                for child,parents_rests in child_parent_rest.items():
+                    #print(length,child,'length and child')
+                    parents=parents_rests[0]
+                    rests=parents_rests[1]
+                    pat_index=parents_rests[2]
                     max_pointer=0
-                    for i in chil:
-                        total_length=pointer[length-1][i]+chil.count(i)
-                        max_pointer=total_length if total_length > max_pointer else max_pointer
-                        
-                    temp_memory=[(par,None)]*(max_pointer)
-                
-                    offset=0
-                    
-                    for j,ch in enumerate(chil):
-                        if j < 1:
-                            temp_pointer=pointer[length-1][ch]
+                    temp_pointer=0
+                    for index,parent in enumerate(parents):
+                        #print(temp_parent_childs_rests)
+                        if parent not in temp_parent_childs_rests:
+                            temp_parent_childs_rests[parent]=[[child],[rests[index]],[pat_index[index]]]
                         else:
-                            if ch==chil[j-1]:
-                                offset += 1
-                            else:
-                                offset=0
-                            
-                            temp_pointer=pointer[length-1][ch]+offset
-                   
-                        temp_memory[temp_pointer]=next(temp_pattern_gen)
-
-                    dict_database.extend(temp_memory)
-                
-        return (dict_database,dict_pointers)
+                            temp_parent_childs_rests[parent][0].extend([child])
+                            temp_parent_childs_rests[parent][1].extend([rests[index]])
+                            temp_parent_childs_rests[parent][2].extend([pat_index[index]])
+                        #print(temp_parent_childs_rests)
+                        temp_pointer=temp_parent_childs_rests[parent][0].index(child)
+                        #print(temp_pointer,'temp_pointer')
+                        max_pointer=temp_pointer if temp_pointer >max_pointer else max_pointer
 
                     
+                    level_pointer[child]=max_pointer
+                    for index,parent in enumerate(parents):
+                        
+                        offset=max_pointer-temp_parent_childs_rests[parent][0].index(child)
+                        if offset <0:
+                            print("trap- something is wrong")
+                        for i in range (offset):
+                            dict_database.append((parent,None))
+                        pattern_reconstruct=(parent+child+rests[index],pat_index[index])
+                        dict_database.append(pattern_reconstruct)
+                        
+                dict_pointer[length-1]=copy.deepcopy(level_pointer)
+        return(dict_database,dict_pointer)
+                            
+                    
+                        
+                        
+                        
+                    
+                    
+                    
+                    
+
                     
 
         
@@ -202,13 +226,8 @@ import os
 def preprocessing(source,qty=1):
     test=dictionary_search(source)
     path_sub_group,path_detect_vector,root_path=test.group_creation(qty)  
-    '''
-    sub_group_file=open(path_sub_group[1],'rb')
-    sub_group=pickle.load(sub_group_file)
-    print(sub_group)
-    print(test.dict_pointer(sub_group))
-    '''      
-          
+    
+               
     path_directories=[qty]
     for index,group in enumerate (root_path):
         #print(index,group)
@@ -218,15 +237,15 @@ def preprocessing(source,qty=1):
         sub_group_file=open(path_sub_group[index],'rb')
         sub_group=pickle.load(sub_group_file)
         unified_sub_group,sub_group_pointer=test.dict_pointer(sub_group)
-        #print(unified_sub_group,'\n\n')
-        #print(sub_group_pointer)
+        print(unified_sub_group,'\n\n')
+        print(sub_group_pointer)
         pickle.dump(unified_sub_group,unified_sub_group_file)
         pickle.dump(sub_group_pointer,sub_group_pointer_file)
         unified_sub_group_file.close()
         sub_group_pointer_file.close()
         sub_group_file.close()
     
-    print(path_directories)
+    #print(path_directories)
     path_directories_file=open(f'{source[0:-4]}_path_directories.pickle','wb')
     pickle.dump(path_directories,path_directories_file)
     path_directories_file.close()
