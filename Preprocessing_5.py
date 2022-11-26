@@ -7,8 +7,10 @@ Created on Sat Jul 30 10:27:55 2022
 import os
 import pickle
 import copy
+import logging
+logging.basicConfig(filename='Debug.log',filemode='w',force=True,level=logging.DEBUG)
 
-class dictionary_search():
+class Dictionary_search():
     
     def __init__(self,source):
         '''source is the input file of malacious patterns. The source file 
@@ -22,42 +24,39 @@ class dictionary_search():
         fin=open(source,'r')
         temp_dict=list(fin)
         temp_dict.sort()
-        self.database=[]
-        self.detect_vector=[]
-        #self.len_vector=[]
+        self.database=[None]
         prefix_vector=[]
         fin.close()
         for index,pattern in enumerate(temp_dict):            
             pattern=pattern.strip('\n')
             leng=len(pattern)
             next_pattern=(temp_dict[index+1].strip('\n')) if index < len(temp_dict)-1 else ""
+            previous_pattern=self.database[-1]
             if pattern != next_pattern[0:leng]:
-                #self.len_vector=set(list(self.len_vector)+[leng])
-                self.database.append(pattern)
                 prefix_vector.append(leng-1)
                 vector=[0]*(leng)
                 for i in prefix_vector:
                     vector[i]=1
+                self.database.append((pattern,vector))
+                if previous_pattern != None:
+                    min_len=min(leng,len(previous_pattern[0]))
+                    for prefix_len in range (1,min_len+1):
+                        if self.database[-1][0][0:prefix_len]==previous_pattern[0][0:prefix_len]:
+                            self.database[-1][1][0:prefix_len]=previous_pattern[1][0:prefix_len]
                 prefix_vector=[]
-                self.detect_vector.append(vector)
 
             elif pattern == next_pattern[0:leng]:
                 prefix_vector.append(leng-1)
-        #self.len_vector=list(self.len_vector)
+        self.database.pop(0)
+
         
     def group_creation(self,qty=1):
         ''' Segregate patterns into the user defined number of groups (default number=1), each group will be
         written into a subfolder with the correspodning detect vector, the path to each 
         folder will be return to be used with other functions'''
         sub_group_file=[None]*qty
-        sub_detect_vector_file=[None]*qty
-        #sub_len_vector_file=[None]*qty
         sub_group=[[None]]*qty
-        sub_detect_vector=[[None]]*qty
-        #sub_len_vector=[[None]]*qty
         self.path_sub_group=[None]*qty
-        self.path_sub_detect_vector=[None]*qty
-        #self.path_sub_len_vector=[None]*qty
         
         paths=[]
 #        try:
@@ -66,32 +65,20 @@ class dictionary_search():
                 if not os.path.exists(paths[-1]):
                     os.mkdir(paths[-1])
                 self.path_sub_group[i]='%s/sub_group_%d.pickle'%(paths[-1],i)
-                self.path_sub_detect_vector[i]='%s/sub_detect_vector_%d.pickle'%(paths[-1],i)
-                #self.path_sub_len_vector[i]='%s/sub_len_vector_%d.txt'%(paths[-1],i)
                 sub_group_file[i]=open(self.path_sub_group[i],'wb')
-                sub_detect_vector_file[i]=open(self.path_sub_detect_vector[i],'wb')
-                #sub_len_vector_file[i]=open(self.path_sub_len_vector[i],'wb')
                 sub_group[i]=[]
-                sub_detect_vector[i]=[]
-                #sub_len_vector[i]=[]
             
         #print(paths)
         for i in range(0,len(self.database)):
                 index=i%qty
-                
-                sub_group[index].append((self.database[i],len(sub_group[index])))
-                sub_detect_vector[index].append(self.detect_vector[i])
-               # sub_len_vector[index]=set(list(sub_len_vector[index])+[len(self.database[i])])
               
+                sub_group[index].append((self.database[i]))
+ 
         for i in range (0,qty):
                 pickle.dump(sub_group[i],sub_group_file[i])
-                pickle.dump(sub_detect_vector[i],sub_detect_vector_file[i])
-                #pickle.dump(list(sub_len_vector[i]),sub_len_vector_file[i])
                 sub_group_file[i].close()
-                sub_detect_vector_file[i].close()
-                #sub_len_vector_file[i].close()
-        
-        return (self.path_sub_group,self.path_sub_detect_vector,paths)
+
+        return (self.path_sub_group,paths)
         
 #        except:
 #            print('Sub directories are already exist for %s'%self.name)        
@@ -100,8 +87,8 @@ class dictionary_search():
         '''implement dictionary algorithm over the given sub_group in order to
         unify the pointer table for each character at each level, return the new dictionary
         along with the pointer table'''
+        #print(sub_group)
         dict_database_length={}
-        #detection_vector=detect_vector
         len_vector=[]
         dict_database=[]
         #print(sub_group,'\n\n')
@@ -109,12 +96,12 @@ class dictionary_search():
             pat_len=len(pattern[0])
             len_vector=set(list(len_vector)+[pat_len])
             dict_database_length[pat_len]=dict_database_length.get(pat_len,[])+[pattern]
-        print(dict_database_length,'\n')
+        #print(dict_database_length,'---------------------------\n')
         len_vector=list(len_vector)
         len_vector.sort(reverse=True)
         #print(len_vector)
         dict_pointer=[None]*(max(len_vector))
-        #print(len_vector,'\n\n')
+        #print(dict_pointer,'\n\n')
         #print(len_vector)
         for n,le in enumerate(len_vector):
             #print(le,'le')
@@ -123,73 +110,84 @@ class dictionary_search():
             dict_database.extend(dict_database_length[le])
             #print(dict_database,'\n\n')
             #dict_database.sort(key=lambda dict_database : dict_database[0])
-            #print(le,dict_database,'le and database\n')
-            
-
+            #print(le,dict_database,'le and database\n')  
             for length in range(le,next_len,-1):
                 patterns=dict_database
                 #max_len_child=0
-                child_parent_rest={}
+                parent_child_rest={}
+                child_vector=[]
                 #print(length)
                 for pattern in patterns:
-            
-                    #print (pattern)
                     parent=pattern[0][0:length-1]
                     child=pattern[0][length-1]
                     rest=pattern[0][length:]
-                    pattern_index=pattern[1]
+                    detect_vector=pattern[1]
+                    child_vector.append(child)
+                    #detect_vector=self.detect_vector[pattern_index] if pattern_index != None else ([0]*len(parent))
                     #print(parent,'----',child,'----',rest,'----,',pattern_index)
                     #parent_child[parent]=parent_child.get(parent,'')+child
-                    if child not in child_parent_rest:
-                        child_parent_rest[child]=[[parent],[rest],[pattern_index]]
+                    if parent not in parent_child_rest:
+                        parent_child_rest[parent]=[[child],[rest],[detect_vector]]
                     else:
-                        child_parent_rest[child][0].extend([parent])
-                        child_parent_rest[child][1].extend([rest])
-                        child_parent_rest[child][2].extend([pattern_index])
+                        parent_child_rest[parent][0].extend([child])
+                        parent_child_rest[parent][1].extend([rest])
+                        parent_child_rest[parent][2].extend([detect_vector])
                     #print(child_parent_rest)
                     #if max_len_child < len(parent_child[parent]):
                     #    max_len_child=max_len_child                    
-                    
-                    
-                #reverse_parent_child={}
-                #parent_childs_rests={}
+                child_vector=list(set(child_vector))
+                child_vector.sort()
                 level_pointer={}
+                for child in child_vector:
+                    change_flag=False
+                    for parent,child_rest in parent_child_rest.items():
+                        child_vector=child_rest[0]
+                        if child in child_vector:
+                            current_pointer=child_vector.index(child)
+                            if child not in level_pointer:
+                                level_pointer[child]=current_pointer
+                            else:
+                                if current_pointer > level_pointer[child]:
+                                    change_flag=True
+                                    level_pointer[child]=current_pointer
+                                elif current_pointer < level_pointer[child]:
+                                    change_flag=True
+                                else:
+                                    pass
+                    if change_flag == True:
+                        for parent,child_rest in parent_child_rest.items():
+                            child_vector=child_rest[0]
+                            if child in child_vector:
+                                current_position=child_vector.index(child)
+                                offset=level_pointer[child]-current_position
+                                if offset < 0 :
+                                    raise ValueError("Error- Something is wrong")
+                                elif offset > 0:
+                                    if parent_child_rest[parent][2][current_position] != None:
+                                        if 1 in parent_child_rest[parent][2][current_position][0:length]:
+                                            current_position_vector=parent_child_rest[parent][2][current_position][0:length]
+                                            parent_child_rest[parent][2][current_position][0:length]=[0]*length
+                                        else:
+                                            current_position_vector=None
+                                    else:
+                                        current_position_vector=None
+                                    for counter in range(offset):
+                                        parent_child_rest[parent][0].insert(current_position,'')
+                                        parent_child_rest[parent][1].insert(current_position,'')
+                                        if counter == offset-1:
+                                            parent_child_rest[parent][2].insert(current_position,current_position_vector)
+                                        else:
+                                            parent_child_rest[parent][2].insert(current_position,None)
+                                else:
+                                    pass
+                dict_pointer[length-1]=copy.deepcopy(level_pointer)    
                 dict_database=[]
-                temp_parent_childs_rests={}
-                #print(child_parent_rest)
-                for child,parents_rests in child_parent_rest.items():
-                    #print(length,child,'length and child')
-                    parents=parents_rests[0]
-                    rests=parents_rests[1]
-                    pat_index=parents_rests[2]
-                    max_pointer=0
-                    temp_pointer=0
-                    for index,parent in enumerate(parents):
-                        #print(temp_parent_childs_rests)
-                        if parent not in temp_parent_childs_rests:
-                            temp_parent_childs_rests[parent]=[[child],[rests[index]],[pat_index[index]]]
-                        else:
-                            temp_parent_childs_rests[parent][0].extend([child])
-                            temp_parent_childs_rests[parent][1].extend([rests[index]])
-                            temp_parent_childs_rests[parent][2].extend([pat_index[index]])
-                        #print(temp_parent_childs_rests)
-                        temp_pointer=temp_parent_childs_rests[parent][0].index(child)
-                        #print(temp_pointer,'temp_pointer')
-                        max_pointer=temp_pointer if temp_pointer >max_pointer else max_pointer
-
-                    
-                    level_pointer[child]=max_pointer
-                    for index,parent in enumerate(parents):
-                        
-                        offset=max_pointer-temp_parent_childs_rests[parent][0].index(child)
-                        if offset <0:
-                            print("trap- something is wrong")
-                        for i in range (offset):
-                            dict_database.append((parent,None))
-                        pattern_reconstruct=(parent+child+rests[index],pat_index[index])
-                        dict_database.append(pattern_reconstruct)
-                        
-                dict_pointer[length-1]=copy.deepcopy(level_pointer)
+                for parent,child_rest in parent_child_rest.items():
+                    for index,child in enumerate(child_rest[0]):
+                        rest=child_rest[1][index]
+                        detect_vector=child_rest[2][index]
+                        pattern_reconstruct=(parent+child+rest,detect_vector)
+                        dict_database.append(pattern_reconstruct)  
         return(dict_database,dict_pointer)
                             
                     
@@ -224,14 +222,14 @@ class dictionary_search():
 #print(test.len_vector)
 import os
 def preprocessing(source,qty=1):
-    test=dictionary_search(source)
-    path_sub_group,path_detect_vector,root_path=test.group_creation(qty)  
+    test=Dictionary_search(source)
+    path_sub_group,root_path=test.group_creation(qty)  
     
                
     path_directories=[qty]
     for index,group in enumerate (root_path):
         #print(index,group)
-        path_directories.append((f'{group}/unified_sub_group_{index}.pickle',f'{group}/sub_group_pointer{index}.pickle',path_detect_vector[index]))
+        path_directories.append((f'{group}/unified_sub_group_{index}.pickle',f'{group}/sub_group_pointer{index}.pickle'))
         unified_sub_group_file=open(path_directories[-1][0],'wb')
         sub_group_pointer_file=open(path_directories[-1][1],'wb')
         sub_group_file=open(path_sub_group[index],'rb')
@@ -263,7 +261,7 @@ def preprocessing(source,qty=1):
 #    y.close()
 #    print(test.dict_pointer(list1,list2))
     
-preprocessing('test3.txt',2)
+preprocessing('test5.txt',1)
     
     
     

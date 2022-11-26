@@ -1,6 +1,4 @@
 xyz
-a
-aa
 aah
 aahed
 aahing
@@ -10,7 +8,6 @@ aalii
 aaliis
 aals
 aardvark
-aardvarks
 aardwolf
 aardwolves
 aas
@@ -25,11 +22,9 @@ befriending
 befriends
 befringe
 befringed
-befringes
 befringing
 befuddle
 befuddled
-befuddles
 befuddling
 beg
 begall
@@ -40,4 +35,3 @@ began
 begat
 begaze
 begazed
-begazes
